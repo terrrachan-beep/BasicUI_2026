@@ -1,12 +1,15 @@
 package tw.edu.pu.csim.tcyang.basicui_2026.s1141706
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.DrawableRes
+import androidx.annotation.RawRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,11 +45,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import tw.edu.pu.csim.tcyang.basicui_2026.s1141706.ui.theme.BasicUI_2026Theme
-
+import androidx.compose.material3.Button
 
 
 class MainActivity : ComponentActivity() {
@@ -67,11 +76,36 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Main (modifier: Modifier = Modifier) {
+    var currentVideo by remember {
+        mutableStateOf(R.raw.love)
+    }
     Box (modifier = modifier.fillMaxSize()) {
         LazyColumnExample()
         ColumnExample()
         TextFieldExample(modifier)
-        LazyRowExample(modifier)
+        Column{
+            SimpleVideoPlayer(currentVideo)
+            Button(
+                onClick = {
+                    currentVideo =
+                        if (currentVideo == R.raw.love) {
+                            R.raw.handpan
+                        } else {
+                            R.raw.love
+                        }
+                }
+            ) {
+                Text(
+                    text = if (currentVideo == R.raw.love) {
+                        "切換至手碟影片"
+                    } else {
+                        "切換至Love影片"
+                    }
+                )
+            }
+            LazyRowExample(modifier)
+        }
+
     }
 
 }
@@ -202,8 +236,10 @@ fun LazyRowExample(modifier: Modifier = Modifier) {
         Animal("狐狸", R.drawable.animal8),
         Animal("小雞", R.drawable.animal9)
     )
+    val context = LocalContext.current
+
     LazyRow(
-        modifier = Modifier.fillMaxHeight(),
+        modifier = Modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 直接傳入 animals 清單，每個迴圈拿到一個 animal 物件
@@ -226,6 +262,15 @@ fun LazyRowExample(modifier: Modifier = Modifier) {
                         painter = painterResource(id = animal.imageRes),
                         contentDescription = animal.name,
                         modifier = Modifier.size(150.dp)
+                            .clickable {
+                                // 點擊時跳出 Toast 訊息
+                                Toast.makeText(
+                                    context,
+                                    "這是 ${animal.name}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -239,4 +284,43 @@ fun LazyRowExample(modifier: Modifier = Modifier) {
         }
     }
 }
+
+@Composable
+fun SimpleVideoPlayer(
+    @RawRes videoRes: Int
+) {
+    val context = LocalContext.current
+
+    // 建立並記住 ExoPlayer 實體，設定影片路徑與自動播放
+    val exoPlayer = remember(videoRes) {
+        ExoPlayer.Builder(context).build().apply {
+            val uri = "android.resource://${context.packageName}/$videoRes"
+            setMediaItem(MediaItem.fromUri(uri))
+            prepare()
+            playWhenReady = true // 載入完成自動播放
+        }
+    }
+    // 利用 DisposableEffect 管理生命週期
+    // 離開畫面時自動釋放記憶體
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer.release() // 💡 釋放播放器資源
+        }
+    }
+    //將原生的 PlayerView 嵌入 Compose
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                player = exoPlayer
+            }
+        },
+        update = { playerView ->
+            playerView.player = exoPlayer
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+    )
+}
+
 
